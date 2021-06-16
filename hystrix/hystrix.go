@@ -113,6 +113,8 @@ func GoC(ctx context.Context, name string, run runFuncC, fallback fallbackFuncC)
 		}
 	}
 
+	// childCtx: to cancel run() function
+	childCtx, cancelChild := context.WithCancel(ctx)
 	go func() {
 		defer func() { cmd.finished <- true }()
 
@@ -157,7 +159,8 @@ func GoC(ctx context.Context, name string, run runFuncC, fallback fallbackFuncC)
 		}
 
 		runStart := time.Now()
-		runErr := run(ctx)
+		runErr := run(childCtx)
+		cancelChild()
 		returnOnce.Do(func() {
 			defer reportAllEvent()
 			cmd.runDuration = time.Since(runStart)
@@ -186,6 +189,7 @@ func GoC(ctx context.Context, name string, run runFuncC, fallback fallbackFuncC)
 			return
 		case <-timer.C:
 			returnOnce.Do(func() {
+				cancelChild()
 				returnTicket()
 				cmd.errorWithFallback(ctx, ErrTimeout)
 				reportAllEvent()
